@@ -1,25 +1,161 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible research week 2 assignment"
+output:
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+## Load the data
 
+Set working directory and download and unzip the file from the internet.
 
+```{r load}
+# Set working directory
+setwd("~/Documents/BGS_admin/Training/Data_science/Module_5_Reproducible Research/Week_2_not_completed/Assignment")
+
+# Download the file from the internet
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = "activity.zip", mode="wb")
+
+# Unzip the file
+unzip("activity.zip")
+Steps <- read.csv("activity.csv", header = TRUE)
+```
+
+## Summarise the data
+
+Summarise the step data.
+
+```{r summary}
+# Summarise the data
+head(Steps)
+summary(Steps)
+str(Steps)
+```
 
 ## What is mean total number of steps taken per day?
 
+The total number of steps taken per day is shown below. 
+```{r steps}
+# Aggregate the steps taken by day and then sum to calculate the total steps taken per day
+Steps_Day <- aggregate(Steps$steps, by=list(Steps$date), sum)
+colnames(Steps_Day) <- c("Day", "Total_steps")
 
+# Display the result
+head(Steps_Day)
+```
+
+Figure 1 shows a histogram of the total steps taken per day.
+```{r steps histogram, echo=TRUE, fig.width=6, fig.height=4}
+hist(Steps_Day$Total_steps, xlab = "Steps", breaks = 20, main="Total number of steps per day", col = c("blue"))
+```
+
+The mean and median of the total number of steps taken per day is shown below.
+```{r summary stats}
+# Calculate the mean
+mean(Steps_Day$Total_steps, na.rm=TRUE)
+
+# Calculate the median
+median(Steps_Day$Total_steps, na.rm=TRUE)
+```
 
 ## What is the average daily activity pattern?
 
+Figure 2 shows a time series plot of the average number of steps across all days plotted against the whole day split into 5 minute intervals.
+```{r steps timeseries, echo=TRUE, fig.width=6, fig.height=4}
+# Create a new matrix with mean values for each 5 minute interval, in order to do so remove any 5 minute interval without data.
+NA_ind <- is.na(Steps$steps)
+Steps_nNA <- Steps[!NA_ind,]
+Steps_int <- aggregate(Steps_nNA$steps, by=list(Steps_nNA$interval), mean)
+colnames(Steps_int) <- c("Interval", "Steps")
+
+# Plot the average number of steps across the days per 5 minute interval
+plot(Steps_int$Interval, Steps_int$Steps, type = "l", xlab = "Five minute interval", ylab = "Average steps", main="Average steps per 5 minute interval")
+```
+
+The 5 minute interval during the day, which on average, has the maximum number of steps is shown below.
+```{r max steps}
+Steps_int_max <- Steps_int[which.max(Steps_int$Steps),]
+Steps_int_max
+```
 
 
 ## Imputing missing values
 
+The number of missing values from the database are shown below.
+```{r missing values}
+No_vals <- sum(NA_ind)
+No_vals
+```
 
+The missing values are replaced in the original dataset with the mean of each 5 minute interval calculated using the remainder of the dataset.
+```{r replace missing values}
+# Construct a function to replace the missing values
+replace_with_mean <- function(num) replace(num, is.na(num), mean(num, na.rm = TRUE))
+
+#Replace the missing values
+library(dplyr)
+Steps_replaced <- (Steps %>% group_by(interval) %>% mutate(steps = replace_with_mean(steps)))
+
+# Display the new dataset
+head(Steps_replaced)
+
+# Check that no missing values remain.
+sum(is.na(Steps_replaced))
+```
+
+The new dataset is summarised below.
+```{r new dataset summary}
+# Convert the new dataset to a dataframe
+Steps_replaced <- as.data.frame(Steps_replaced)
+
+# Summarise the new dataframe
+head(Steps_replaced)
+summary(Steps_replaced)
+str(Steps_replaced)
+```
+
+The mean and median of the total number of steps taken per day is shown below.
+```{r steps new dataset}
+# Aggregate the steps taken by day and then sum to calculate the total steps taken per day
+Steps_Day_rep <- aggregate(Steps_replaced$steps, by=list(Steps_replaced$date), sum)
+colnames(Steps_Day_rep) <- c("Day", "Total_steps")
+
+# Calculate the mean
+mean(Steps_Day_rep$Total_steps)
+
+# Calculate the median
+median(Steps_Day_rep$Total_steps)
+
+```
+Replacing the missing values has increased the median by 1.19, but the mean remains the same.
+
+Figure 3 shows a histogram of the total steps taken per day but using the new dataset (red) compared to the old dataset (blue).
+```{r steps histogram new dataset, echo=TRUE, fig.width=6, fig.height=4}
+par(1,2)
+hist(Steps_Day_rep$Total_steps, xlab = "Steps", breaks = 20, main="Total number of steps per day", col = c("red"))
+hist(Steps_Day$Total_steps, xlab = "Steps", breaks = 20, main="Total number of steps per day", col = c("blue"))
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+The new dataset is split up into weekends and weekdays and activity levels are compared in Figure 4.
+```{r steps timeseries new dataset, echo=TRUE, fig.width=6, fig.height=4}
+# Create new dataframe wth weekday and weekend variables
+Steps_replaced$date <- as.Date(Steps_replaced$date)
+Steps_replaced$weekday <- weekdays(Steps_replaced$date)
+Steps_replaced$weekend <- ifelse(Steps_replaced$weekday=="Saturday" | Steps_replaced$weekday=="Sunday", "Weekend", "Weekday" )
+
+# Plot the difference between activity patterns on weekdays and weekends.
+library(ggplot2)
+Week_period <- aggregate(Steps_replaced$steps , by= list(Steps_replaced$weekend, Steps_replaced$interval), na.omit(mean))
+names(Week_period) <- c("weekend", "interval", "steps")
+
+ggplot(Week_period, aes(x=interval, y=steps, color=weekend)) + geom_line()+
+    facet_grid(weekend ~.) + xlab("Interval") + ylab("Mean of Steps") +
+    ggtitle("Comparison of Average Number of Steps in Each Interval") + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+There is a difference in activity levels between weekdays and weekends, in particular there is a more gradual increase in activity at the weekend, and activity levels remain more consistent.
